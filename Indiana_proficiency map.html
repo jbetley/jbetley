@@ -225,7 +225,6 @@ function stopped() {
   if (d3.event.defaultPrevented) d3.event.stopPropagation();
 }
 
-// i dont remember writing this
 // takes as input an array of schools in a district- x, y and r values
 function shifty (s) { // shifty circles
   for (let q=0;q < s.length - 1; q++) {
@@ -302,7 +301,8 @@ d3.queue()
   window.open(encodedUri);
 */
 
-/* NEST ON SCHOOL YEAR? 
+/* Eventually want to nest on school year to enable multi-year comparisons. Below is test
+   code from another project that is not currently relevant here
 
   var nestData = d3.nest()
         .key(function(d){
@@ -339,6 +339,7 @@ var updateMap = function(a,b,c,d,e) {
     labels = ['0-20%', '21-30%', '31-40%', '41-50%', '51-60%', '61-70%', '71-80%', '81-90%', '> 91%'];
   }
 
+// Add additional school years and grade levels once data is ready/sorted
   if (b == '2018') {} else if (b == '2019') {} else if (b == 2021) {};
   if (c == '3-8') {} else if (c == '9-12') {};
 
@@ -392,7 +393,7 @@ var updateMap = function(a,b,c,d,e) {
     .attr("d", path)
     .attr("fill", function (d, i) {
 
-      //// Change to Corp ID //////// ADD CORP ID TO DISTRICT FILE ////
+      //// Change to Corp ID //////// Need to add Corp ID to school file ////
       const milla = scdata.find(f => f['GEO ID'] === d.properties.GEOID)
   
       if (milla[v] === "" || milla[v] === "***" || isNaN(milla[v])) {
@@ -427,7 +428,7 @@ function clicked(d) {
               
     if (d3.polygonContains(active.datum().geometry.coordinates[0], [s.geometry.coordinates[0],s.geometry.coordinates[1]])) {
 
-      const max = 9; // Grade levels -> TODO: set according to checkbox tag (3-8 or 9-12)
+      const max = 9; // Grade levels -> TODO: set according to checkbox tag (3-8 or 9-12) - see above
       const min = 2;
       var low;
 
@@ -449,18 +450,21 @@ function clicked(d) {
     .duration(500)
     .remove();
 
-// Explode circles where there is overlap (shifty())
+// reduce radius if there are > 50 points - probably want to do this mathmatically.
 
-  if (schoolsInDist.features.length > 50) { rad = 1.5 } else { rad = 2 } // reduce radius if there are > 50 points
+  if (schoolsInDist.features.length > 50) { rad = 1.5 } else { rad = 2 } 
 
 // Is it faster to map to matrix first? Or run schoolsInDist.features through shifty()?
 // the latter hits projection() far more times (each time it loops)
+
   group = schoolsInDist.features.map(o => ({
     x: projection(o.geometry.coordinates)[0],
     y: projection(o.geometry.coordinates)[1],
     r: rad,
     school_id: o.properties.SCHOOL_ID 
   }))
+
+// Shift circles where there is overlap
 
   shifty(group); // more than two times and points get pushed outside of district boundaries
   shifty(group); // TODO: max push coordinates limited by district boundaries
