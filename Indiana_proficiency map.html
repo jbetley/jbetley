@@ -135,7 +135,7 @@ input[type=radio]:checked + label{
 </head>
 
 <body>
-<h2>ILEARN Proficiency by School and School Corporation</h2>    
+<h2>Test Proficiency by School and School Corporation</h2>    
 <div class="top">
     <form>
         <div class="radio-group">
@@ -146,7 +146,7 @@ input[type=radio]:checked + label{
         <div class="radio-group">
             <span>Year:</span>
                 <input type="radio" id="option-2a" name="year" value="2021" checked><label for="option-2a">2021</label>
-                <input type="radio" id="option-2b" name="year" value="2020"><label for="option-2b">2020</label>
+<!--                <input type="radio" id="option-2b" name="year" value="2020"><label for="option-2b">2020</label>-->
                 <input type="radio" id="option-2c" name="year" value="2019"><label for="option-2c">2019</label>
                 <input type="radio" id="option-2d" name="year" value="2018"><label for="option-2d">2018</label>
         </div>
@@ -225,8 +225,13 @@ function stopped() {
   if (d3.event.defaultPrevented) d3.event.stopPropagation();
 }
 
-// takes as input an array of schools in a district- x, y and r values
-function shifty (s) { // shifty circles
+// takes as input an array of points on the map (schools in a district)- each with x, y and r values
+// measures distance between center of each point to determine if there is overlap (based on r value)
+// modifies x & y based on 'direction' of the overlap in order to 'shift' the points away from each other
+// may need to run array through function more than once, as each shift may create a new overlap with a 
+// different point.
+
+function shifty (s) {
   for (let q=0;q < s.length - 1; q++) {
     for (let p=q+1;p < s.length; p++) {
       if (Math.hypot(s[q].x - s[p].x, s[q].y - s[p].y) < 2 * s[q].r) {
@@ -278,10 +283,11 @@ var zoom = d3.zoom()
 //  .call(zoom); 
 
 d3.queue()
-  .defer(d3.csv, "ilearn2021-corporations.csv")
+  .defer(d3.csv, "corp-testdata.csv")
+//  .defer(d3.csv, "ilearn2021-corporations.csv")
   .defer(d3.csv, "ilearn2021-schools.csv")
-  .defer(d3.json, "INschool-corporations.geo.v2.json")
-  .defer(d3.json, "INpublic-schools.geo.v6.json")
+  .defer(d3.json, "school-corporations.geo_2021.json")
+  .defer(d3.json, "public-schools.geo_2021.json")
   .await(function(error,scdata,schdata,INdistricts,INschools) {
 
   if (error) {
@@ -289,7 +295,7 @@ d3.queue()
   }
   else {
 
-/* Hack to download info from JSON for comparison purposes 
+/* Hack to download info from topoJSON for comparison purposes 
 
   var tmp = []
   var allSchools = schools.features.filter(function(z) {
@@ -301,14 +307,13 @@ d3.queue()
   window.open(encodedUri);
 */
 
-/* Eventually want to nest on school year to enable multi-year comparisons. Below is test
-   code from another project that is not currently relevant here
+// Eventually want to nest on school year to enable multi-year comparisons.
 
-  var nestData = d3.nest()
+  var scdata_by_year = d3.nest()
         .key(function(d){
-            return d.metric;
+            return d['Year'];
         })
-        .rollup(function(leaves){
+/*        .rollup(function(leaves){
             var ymax = d3.max(leaves, d => d.year)
             var ymin = d3.min(leaves, d => d.year)
 //            var vmax = d3.max(leaves, d => d.mval)
@@ -317,17 +322,20 @@ d3.queue()
           .entries(leaves);
             return {ymax:ymax, ymin:ymin, school:school};
 //          return {ymax:ymax, ymin:ymin, vmax:vmax, vmin:vmin, school:school};
-          })
-        .entries(data)
-*/
+          }) */
+        .entries(scdata)
 
+  var scdata_2019 = scdata_by_year.filter(d => d.key == '2019');
+  var scdata_2021 = scdata_by_year.filter(d => d.key == '2021');
+  
   const districts = topojson.feature(INdistricts, INdistricts.objects.districts);
   const schools = topojson.feature(INschools, INschools.objects.publicschools);
   const mesh = topojson.mesh(INdistricts, INdistricts.objects.districts);
   const projection = d3.geoMercator().fitSize([width, height], mesh);
 
 var updateMap = function(a,b,c,d,e) {
-// a - scoring; b - year; c - grades; d - group; e - subject
+let corpdata = [];
+  // a - scoring; b - year; c - grades; d - group; e - subject
 
   if (a == 'Scaled') {
     selectedDomain = [.05,.10,.15,.25,.35,.45,.55,.65];
@@ -340,7 +348,7 @@ var updateMap = function(a,b,c,d,e) {
   }
 
 // Add additional school years and grade levels once data is ready/sorted
-  if (b == '2018') {} else if (b == '2019') {} else if (b == 2021) {};
+  if (b == '2018') {} else if (b == '2019') {corpdata = scdata_2019[0].values} else if (b == '2021') {corpdata = scdata_2021[0].values};
   if (c == '3-8') {} else if (c == '9-12') {};
 
   color = d3.scaleThreshold()
@@ -362,7 +370,7 @@ var updateMap = function(a,b,c,d,e) {
   let y = 0,
     txt = [];
 
-  const nSize = scdata.filter(d=> +d[w] > 10);
+  const nSize = corpdata.filter(d=> +d[w] > 10);
   const proficiencyGroup = nSize.filter(d=> isNumeric(d[v]));
 
   proficiencyGroup.sort(function (a, b) {
@@ -393,13 +401,16 @@ var updateMap = function(a,b,c,d,e) {
     .attr("d", path)
     .attr("fill", function (d, i) {
 
-      //// Change to Corp ID //////// Need to add Corp ID to school file ////
-      const milla = scdata.find(f => f['GEO ID'] === d.properties.GEOID)
-  
-      if (milla[v] === "" || milla[v] === "***" || isNaN(milla[v])) {
+      const corp_fill = corpdata.find(f => f['GEO ID'] === d.properties.GEOID)
+
+      if (corp_fill != null) { // corp_fill is undefined if corp in JSON file doesn't have any data
+
+        if (corp_fill[v] === "" || corp_fill[v] === "***" || isNaN(corp_fill[v])) {
+          return "grey"
+        } else
+          return color(corp_fill[v])
+        }
         return "grey"
-      } else
-        return color(milla[v])
     }) 
     .attr("stroke", "white")
     .on("click", clicked);
@@ -482,17 +493,17 @@ function clicked(d) {
     .style("fill", function (d, i) {
 //// Deal with case where ID begins with alpha - accredited non-pubs ////
 //if (!isNumeric(s.properties.SCHOOL_ID)) {console.log(s.properties.SCHOOL_ID)} ;
-      const nico = schdata.find(f => +f['School ID'] === +d.school_id)
+      const school_fill = schdata.find(f => +f['School ID'] === +d.school_id)
 
-        if (nico == null) { return "grey" }
+      if (school_fill == null) { return "grey" } // why is this different than corp_fill
            
-        if (nico[v] === "" || nico[v] === "***" || isNaN(nico[v]) || nico[v] == null) {
-          return "grey"
-        }
-        else {
-          return color(nico[v])
-        }
-      })
+      if (school_fill[v] === "" || school_fill[v] === "***" || isNaN(school_fill[v]) || school_fill[v] == null) {
+        return "grey"
+      }
+      else {
+        return color(school_fill[v])
+      }
+    })
     .style("opacity", 0)
     .on('mouseover',function(d, i) {
         
